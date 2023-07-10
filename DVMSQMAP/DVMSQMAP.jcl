@@ -5,6 +5,7 @@
 //             PARM='%DVMSQMAP AVZx'
 //STEPLIB  DD  DISP=SHR,DSN=dvm-load-library
 //SYSTSPRT DD  SYSOUT=*
+//SUMMARY  DD  SYSOUT=*
 //SYSEXEC  DD  DISP=SHR,DSN=your-user-rexx-library
 //         DD  DISP=SHR,DSN=dvm-supplied-savxexec-library
 //SYSTSIN  DD  DUMMY

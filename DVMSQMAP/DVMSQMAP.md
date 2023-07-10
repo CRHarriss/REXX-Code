@@ -22,6 +22,8 @@ Add DD statement for your own REXX library in SYSEXEC
 
 Change SYSEXEC to include DVM supplied SAVZEXEC
 
+Note: The SUMMARY DD statement provies a 1 line report on the success (or failure) of each virtual table request
+
 ## Parameters that can be supplied to the DVMSQMAP 
 
 SPECIFY THE NAME OF THE DVM SERVER
@@ -43,6 +45,8 @@ SRCDSN = COPYBOOK_DSN
 ## Specification of the Virtual Table / Map
 
 SEQVT                 Denotes a sequential file mapping
+
+VSAMVT                Denotes a VSAM file (cluster) mapping
 
 VIRTUAL_TABLE_NAME    Name of the MAP / Virtual Table to create
 
