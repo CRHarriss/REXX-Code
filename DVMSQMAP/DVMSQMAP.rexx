@@ -194,6 +194,8 @@ do p = 1 to in.0
       say 'copyname ' copyname
       say 'strtfld  ' strtfld
 
+      vtype = 'SEQ'
+
       /* verify the virtual table name is valid if required           */
 
       vtname = strip(vtname)
@@ -255,7 +257,96 @@ do p = 1 to in.0
       then
       do
         vtbn = vtbn + 1
-        vtb.vtbn = vtname seqdsn copystrt copyname srcdsn
+        vtb.vtbn = vtype vtname seqdsn copystrt copyname srcdsn
+        say copies(' ',80)
+        say 'Input VT entry ' vtname ' added to list for processing'
+        say vtb.vtbn
+        say copies(' ',80)
+      end
+    end
+    when word(parm,1) = 'VSAMVT'
+    then
+    do
+
+      /* Processing a request for a VSAM VT mapping                   */
+
+      copystrt = ''
+      vterr = false
+
+      parse var parm . '=' vtname vsmdsn copyname strtfld .
+
+      say copies('=',80)
+      say copies(' ',80)
+      say 'Next VSAMVT entry supplied being processed'
+      say 'vtname   ' vtname
+      say 'vsmdsn   ' vsmdsn
+      say 'copyname ' copyname
+      say 'strtfld  ' strtfld
+
+      vtype = 'VSM'
+
+      /* verify the virtual table name is valid if required           */
+
+      vtname = strip(vtname)
+
+      if length(vtname) > 30
+      then
+      do
+        say 'Virtual Table name ' vtname ' must not exceed 30 chars'
+        vterr = true
+      end
+
+      /* verify the dataset to be associated with virtual table       */
+      /* The dataset must exist and be a valid VSAM cluster           */
+
+      vsmdsn = strip(vsmdsn)
+
+      vvsm = ckvsam(vsmdsn)
+
+      if vvsm <> true
+      then
+      do
+        say 'VSAMDSN' vsmdsn 'is invalid'
+        vterr = true
+      end
+
+      /* verify the copybook member is in the copybook pds supplied   */
+
+      if pos(copyname,copylist) = 0
+      then
+      do
+        say 'Copybook Member' copyname ' not found in Copybook PDS'
+        vterr = true
+      end
+      else
+      do
+
+        if strtfld = ' '
+        then
+        do
+          /* No Start Field supplied so we need to use copybook to    */
+          /* extract the 01 level name for start field                */
+
+          call getstrt copyname
+
+          /* if nothing could be extracted by-pass processing VT req  */
+
+          if copystrt  = ''
+          then Vterr = true
+          else vterr = false
+
+        end
+        else
+        do
+          copystrt = strtfld
+        end
+      end
+
+      if vterr = false
+      then
+      do
+        vtbn = vtbn + 1
+        vtb.vtbn = vtype vtname vsmdsn copystrt copyname srcdsn
         say copies(' ',80)
         say 'Input VT entry ' vtname ' added to list for processing'
         say vtb.vtbn
@@ -434,9 +525,9 @@ do mapvt = 1 to vtbn
   if mapvt = vtbn
   then finalmap = true
 
-  parse var vtb.mapvt mvtb mseq mstrt mcopy msrcdsn .
+  parse var vtb.mapvt mvtype mvtb mseq mstrt mcopy msrcdsn .
 
-  m = map('SEQ',mvtb, mseq, mstrt, mcopy, msrcdsn)
+  m = map(mvtype,mvtb, mseq, mstrt, mcopy, msrcdsn)
 
 end
 
@@ -485,6 +576,28 @@ select
       sysin.0  = 9
     end
   end
+  when type = 'VSM'
+  then
+  do
+    src = p5'('p4')'
+    say src
+    sysin.1  = 'SSID           =' ssid
+    sysin.2  = 'FUNCTION       = STOD'
+    sysin.3  = 'SOURCE         =' src
+    sysin.4  = 'MAP NAME       =' p1
+    sysin.5  = 'VSAM FILE      =' p2
+    sysin.6  = 'START FIELD    =' p3
+    sysin.7  = 'END FIELD      =     '
+    sysin.8  = 'SAVE OPTION    =' saveopt
+    sysin.0 = 8
+
+    if finalmap
+    then
+    do
+      sysin.9  = 'REFRESH OPTION =' refreshopt
+      sysin.0  = 9
+    end
+  end
   otherwise nop
 end
 
@@ -510,8 +623,9 @@ if fail
 then status = 'FAILED'
 else status = 'SUCCESS'
 
-if type = 'SEQ'
-then type = 'MAP'
+/* if type = 'SEQ'   */
+/* then type = 'MAP' */
+type = 'MAP'
 
 sln = status type left(p1,30)
 summary.0 = summary.0 + 1
@@ -519,3 +633,56 @@ lnum = summary.0
 summary.lnum = sln
 
 return mrc
+
+ckvsam:
+
+/*-------------------------------------------------------------------*/
+/* Check dataset supplied is a vsam dataset                          */
+/*-------------------------------------------------------------------*/
+
+arg vsam
+
+valid = true
+clustdsn = ''
+
+vsam = strip(vsam)
+
+x = outtrap('listc.')
+
+"LISTC ENTRIES('"vsam"') CLUSTER ALL"
+
+select
+  when (RC = 0)
+  then
+  do
+    x = outtrap('off')
+
+    do i=1 to listc.0
+      select
+        when pos('CLUSTER', listc.i) > 0
+        then
+        do
+          clustdsn = substr(listc.i,17,44)
+          clustdsn = strip(clustdsn)
+        end
+        otherwise nop
+      end
+    end
+  end
+  when (RC = 4)
+  then
+  do
+    say 'File supplied is not a VSAM cluster'
+    valid = false
+  end
+  otherwise
+  do
+    say 'LISTCAT error RC = ' RC
+    valid = false
+  end
+end
+
+/* say 'cluster dsn  = ' clustdsn */
+
+return valid
+
